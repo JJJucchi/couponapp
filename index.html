@@ -2,14 +2,11 @@
 <html lang="ja">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport"
-content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-
-<title>クーポン管理</title>
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>クーポン管理（圧縮版）</title>
 
 <style>
-*{box-sizing:border-box;}
-
+*{box-sizing:border-box}
 body{
   font-family:-apple-system,BlinkMacSystemFont,sans-serif;
   max-width:430px;
@@ -18,39 +15,33 @@ body{
   background:#f7f7f7;
   font-size:16px;
 }
-
 h1{
   text-align:center;
   font-size:22px;
   margin:8px 0 12px;
 }
-
 .row{
   display:flex;
   gap:6px;
   margin-bottom:8px;
 }
-
 input,textarea,button,select{
   width:100%;
   padding:10px;
-  font-size:16px; /* iPhone拡大防止 */
-  border-radius:10px;
+  font-size:16px;
   border:1px solid #ccc;
+  border-radius:10px;
 }
-
 textarea{
   resize:none;
   height:65px;
 }
-
 button{
   background:#007aff;
   color:#fff;
   border:none;
   font-weight:bold;
 }
-
 .card{
   background:#fff;
   border-radius:12px;
@@ -58,23 +49,19 @@ button{
   margin:8px 0;
   box-shadow:0 1px 4px rgba(0,0,0,.08);
 }
-
 .card img{
   width:100%;
-  max-height:130px;
+  max-height:140px;
   object-fit:contain;
   margin-top:8px;
   border-radius:10px;
 }
-
-.expired{background:#ffe2e2;}
-.used{opacity:.55;}
-
+.expired{background:#ffe3e3}
+.used{opacity:.55}
 .small{
   font-size:12px;
   color:#666;
 }
-
 #modal{
   display:none;
   position:fixed;
@@ -82,7 +69,6 @@ button{
   background:rgba(0,0,0,.85);
   z-index:9999;
 }
-
 #modal img{
   max-width:100%;
   max-height:100%;
@@ -94,10 +80,10 @@ button{
 
 <body>
 
-<h1>クーポン管理</h1>
+<h1>クーポン管理（圧縮版）</h1>
 
 <div id="modal" onclick="this.style.display='none'">
-  <img id="modalImg">
+<img id="modalImg">
 </div>
 
 <div class="row"><input id="name" placeholder="クーポン名"></div>
@@ -107,9 +93,9 @@ button{
 
 <div class="row">
 <select id="sort" onchange="render()">
-  <option value="dateAsc">期限が近い順</option>
-  <option value="dateDesc">期限が遠い順</option>
-  <option value="name">名前順</option>
+<option value="dateAsc">期限が近い順</option>
+<option value="dateDesc">期限が遠い順</option>
+<option value="name">名前順</option>
 </select>
 </div>
 
@@ -135,6 +121,44 @@ function gv(id){
  return document.getElementById(id).value;
 }
 
+/* ---------- 画像圧縮 ---------- */
+function compressImage(file,callback){
+
+ const img=new Image();
+ const reader=new FileReader();
+
+ reader.onload=e=>{
+   img.src=e.target.result;
+ };
+
+ img.onload=()=>{
+
+   const canvas=document.createElement("canvas");
+
+   let w=img.width;
+   let h=img.height;
+
+   const max=600; // 最大横幅
+
+   if(w>max){
+     h=h*(max/w);
+     w=max;
+   }
+
+   canvas.width=w;
+   canvas.height=h;
+
+   const ctx=canvas.getContext("2d");
+   ctx.drawImage(img,0,0,w,h);
+
+   const compressed=canvas.toDataURL("image/jpeg",0.65); 
+   callback(compressed);
+ };
+
+ reader.readAsDataURL(file);
+}
+/* -------------------------- */
+
 function addCoupon(){
 
  const file=document.getElementById("img").files[0];
@@ -157,12 +181,10 @@ function addCoupon(){
  };
 
  if(file){
-   const r=new FileReader();
-   r.onload=()=>{
-     item.img=r.result;
+   compressImage(file,(img)=>{
+     item.img=img;
      done();
-   };
-   r.readAsDataURL(file);
+   });
  }else{
    done();
  }
@@ -191,10 +213,10 @@ function del(id){
 
 function esc(s){
  return String(s).replace(/[&<>"]/g,m=>({
-   "&":"&amp;",
-   "<":"&lt;",
-   ">":"&gt;",
-   '"':"&quot;"
+ "&":"&amp;",
+ "<":"&lt;",
+ ">":"&gt;",
+ '"':"&quot;"
  }[m]));
 }
 
