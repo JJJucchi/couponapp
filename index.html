@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>クーポン管理 完全版</title>
+<title>クーポン管理 複数画像→個別追加版</title>
 
 <style>
 *{box-sizing:border-box}
@@ -15,16 +15,8 @@ body{
   background:#f7f7f7;
   font-size:16px;
 }
-h1{
-  text-align:center;
-  font-size:22px;
-  margin:8px 0 12px;
-}
-.row{
-  display:flex;
-  gap:6px;
-  margin-bottom:8px;
-}
+h1{font-size:22px;text-align:center;margin:8px 0 12px}
+.row{display:flex;gap:6px;margin-bottom:8px}
 input,textarea,button,select{
   width:100%;
   padding:10px;
@@ -32,10 +24,7 @@ input,textarea,button,select{
   border:1px solid #ccc;
   border-radius:10px;
 }
-textarea{
-  resize:none;
-  height:65px;
-}
+textarea{resize:none;height:65px}
 button{
   background:#007aff;
   color:#fff;
@@ -58,10 +47,10 @@ button{
 }
 .expired{background:#ffe3e3}
 .used{opacity:.55}
-.small{
-  font-size:12px;
-  color:#666;
-}
+.small{font-size:12px;color:#666}
+.linkbtn{background:#34c759}
+.delbtn{background:#ff3b30}
+
 #modal{
   display:none;
   position:fixed;
@@ -80,7 +69,7 @@ button{
 
 <body>
 
-<h1>クーポン管理 完全版</h1>
+<h1>クーポン管理</h1>
 
 <div id="modal" onclick="this.style.display='none'">
 <img id="modalImg">
@@ -89,6 +78,7 @@ button{
 <div class="row"><input id="name" placeholder="クーポン名"></div>
 <div class="row"><input id="store" placeholder="店舗名"></div>
 <div class="row"><input id="date" type="date"></div>
+<div class="row"><input id="url" placeholder="URL"></div>
 <div class="row"><input id="search" placeholder="検索" oninput="render()"></div>
 
 <div class="row">
@@ -101,16 +91,20 @@ button{
 
 <textarea id="memo" placeholder="メモ"></textarea>
 
-<div class="row"><input id="img" type="file" accept="image/*"></div>
-<div class="row"><button onclick="addCoupon()">追加</button></div>
+<div class="row">
+<input id="img" type="file" accept="image/*" multiple>
+</div>
+
+<div class="row">
+<button onclick="addCoupon()">追加</button>
+</div>
 
 <div id="list"></div>
 
 <script>
 let db;
 
-/* ---------- IndexedDB ---------- */
-const req=indexedDB.open("couponDB",1);
+const req=indexedDB.open("couponDB4",1);
 
 req.onupgradeneeded=e=>{
  db=e.target.result;
@@ -141,81 +135,89 @@ function deleteItem(id){
 function getAll(){
  return new Promise(res=>{
    const tx=db.transaction("coupons","readonly");
-   const req=tx.objectStore("coupons").getAll();
-   req.onsuccess=()=>res(req.result);
+   const r=tx.objectStore("coupons").getAll();
+   r.onsuccess=()=>res(r.result);
  });
 }
-/* ------------------------------ */
 
 function gv(id){
  return document.getElementById(id).value;
 }
 
-/* 画像圧縮 */
-function compressImage(file,callback){
+function compressImage(file){
+ return new Promise(res=>{
 
- const img=new Image();
- const r=new FileReader();
+   const img=new Image();
+   const rd=new FileReader();
 
- r.onload=e=>img.src=e.target.result;
+   rd.onload=e=>img.src=e.target.result;
 
- img.onload=()=>{
+   img.onload=()=>{
 
-   let w=img.width;
-   let h=img.height;
+     let w=img.width;
+     let h=img.height;
+     const max=600;
 
-   const max=600;
+     if(w>max){
+       h=h*(max/w);
+       w=max;
+     }
 
-   if(w>max){
-     h=h*(max/w);
-     w=max;
-   }
+     const canvas=document.createElement("canvas");
+     canvas.width=w;
+     canvas.height=h;
 
-   const canvas=document.createElement("canvas");
-   canvas.width=w;
-   canvas.height=h;
+     const ctx=canvas.getContext("2d");
+     ctx.drawImage(img,0,0,w,h);
 
-   const ctx=canvas.getContext("2d");
-   ctx.drawImage(img,0,0,w,h);
+     res(canvas.toDataURL("image/jpeg",0.65));
+   };
 
-   callback(canvas.toDataURL("image/jpeg",0.65));
- };
-
- r.readAsDataURL(file);
+   rd.readAsDataURL(file);
+ });
 }
 
+/* 複数画像を別々登録 */
 async function addCoupon(){
 
- const file=document.getElementById("img").files[0];
+ const files=[...document.getElementById("img").files];
 
- const item={
-   id:Date.now(),
-   name:gv("name"),
-   store:gv("store"),
-   date:gv("date"),
-   memo:gv("memo"),
-   img:"",
-   used:false
- };
-
- const done=async()=>{
-   await saveItem(item);
-   clearForm();
-   render();
- };
-
- if(file){
-   compressImage(file,img=>{
-     item.img=img;
-     done();
+ if(files.length===0){
+   await saveItem({
+     id:Date.now(),
+     name:gv("name"),
+     store:gv("store"),
+     date:gv("date"),
+     memo:gv("memo"),
+     url:gv("url"),
+     img:"",
+     used:false
    });
  }else{
-   done();
+
+   for(const file of files){
+
+     const img=await compressImage(file);
+
+     await saveItem({
+       id:Date.now()+Math.random(),
+       name:gv("name"),
+       store:gv("store"),
+       date:gv("date"),
+       memo:gv("memo"),
+       url:gv("url"),
+       img:img,
+       used:false
+     });
+   }
  }
+
+ clearForm();
+ render();
 }
 
 function clearForm(){
-["name","store","date","memo","img"].forEach(id=>{
+["name","store","date","memo","img","url"].forEach(id=>{
  document.getElementById(id).value="";
 });
 }
@@ -247,15 +249,15 @@ function sortData(arr){
  const mode=gv("sort");
 
  if(mode==="dateAsc"){
-   arr.sort((a,b)=>(a.date||"9999").localeCompare(b.date||"9999"));
+  arr.sort((a,b)=>(a.date||"9999").localeCompare(b.date||"9999"));
  }
 
  if(mode==="dateDesc"){
-   arr.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
+  arr.sort((a,b)=>(b.date||"").localeCompare(a.date||""));
  }
 
  if(mode==="name"){
-   arr.sort((a,b)=>a.name.localeCompare(b.name,"ja"));
+  arr.sort((a,b)=>a.name.localeCompare(b.name,"ja"));
  }
 
  return arr;
@@ -274,9 +276,9 @@ async function render(){
  list.innerHTML="";
 
  let arr=data.filter(x=>
-  x.name.toLowerCase().includes(q) ||
-  x.store.toLowerCase().includes(q) ||
-  x.memo.toLowerCase().includes(q)
+   x.name.toLowerCase().includes(q) ||
+   x.store.toLowerCase().includes(q) ||
+   x.memo.toLowerCase().includes(q)
  );
 
  arr=sortData(arr);
@@ -299,16 +301,27 @@ async function render(){
    ${x.used?"未使用へ戻す":"使用済み"}
    </button>
 
-   <button onclick="del(${x.id})" style="background:#ff3b30">
+   <button class="delbtn" onclick="del(${x.id})">
    削除
    </button>
  </div>
+
+ ${x.url?`
+ <div class="row">
+ <button class="linkbtn" onclick="openUrl('${x.url}')">
+ URLを開く
+ </button>
+ </div>`:""}
 
  ${x.img?`<img src="${x.img}" onclick="zoom('${x.img}')">`:""}
  `;
 
  list.appendChild(d);
  });
+}
+
+function openUrl(url){
+ window.open(url,"_blank");
 }
 
 function zoom(src){
