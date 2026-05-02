@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<title>クーポン管理（圧縮版）</title>
+<title>クーポン管理 完全版</title>
 
 <style>
 *{box-sizing:border-box}
@@ -66,7 +66,7 @@ button{
   display:none;
   position:fixed;
   inset:0;
-  background:rgba(0,0,0,.85);
+  background:rgba(0,0,0,.9);
   z-index:9999;
 }
 #modal img{
@@ -80,7 +80,7 @@ button{
 
 <body>
 
-<h1>クーポン管理（圧縮版）</h1>
+<h1>クーポン管理 完全版</h1>
 
 <div id="modal" onclick="this.style.display='none'">
 <img id="modalImg">
@@ -107,59 +107,84 @@ button{
 <div id="list"></div>
 
 <script>
-let data=[];
+let db;
 
-try{
- data=JSON.parse(localStorage.getItem("coupons")||"[]");
-}catch(e){data=[];}
+/* ---------- IndexedDB ---------- */
+const req=indexedDB.open("couponDB",1);
 
-function save(){
- localStorage.setItem("coupons",JSON.stringify(data));
+req.onupgradeneeded=e=>{
+ db=e.target.result;
+ db.createObjectStore("coupons",{keyPath:"id"});
+};
+
+req.onsuccess=e=>{
+ db=e.target.result;
+ render();
+};
+
+function saveItem(item){
+ return new Promise(res=>{
+   const tx=db.transaction("coupons","readwrite");
+   tx.objectStore("coupons").put(item);
+   tx.oncomplete=()=>res();
+ });
 }
+
+function deleteItem(id){
+ return new Promise(res=>{
+   const tx=db.transaction("coupons","readwrite");
+   tx.objectStore("coupons").delete(id);
+   tx.oncomplete=()=>res();
+ });
+}
+
+function getAll(){
+ return new Promise(res=>{
+   const tx=db.transaction("coupons","readonly");
+   const req=tx.objectStore("coupons").getAll();
+   req.onsuccess=()=>res(req.result);
+ });
+}
+/* ------------------------------ */
 
 function gv(id){
  return document.getElementById(id).value;
 }
 
-/* ---------- 画像圧縮 ---------- */
+/* 画像圧縮 */
 function compressImage(file,callback){
 
  const img=new Image();
- const reader=new FileReader();
+ const r=new FileReader();
 
- reader.onload=e=>{
-   img.src=e.target.result;
- };
+ r.onload=e=>img.src=e.target.result;
 
  img.onload=()=>{
-
-   const canvas=document.createElement("canvas");
 
    let w=img.width;
    let h=img.height;
 
-   const max=600; // 最大横幅
+   const max=600;
 
    if(w>max){
      h=h*(max/w);
      w=max;
    }
 
+   const canvas=document.createElement("canvas");
    canvas.width=w;
    canvas.height=h;
 
    const ctx=canvas.getContext("2d");
    ctx.drawImage(img,0,0,w,h);
 
-   const compressed=canvas.toDataURL("image/jpeg",0.65); 
-   callback(compressed);
+   callback(canvas.toDataURL("image/jpeg",0.65));
  };
 
- reader.readAsDataURL(file);
+ r.readAsDataURL(file);
 }
-/* -------------------------- */
 
-function addCoupon(){
+async function addCoupon(){
 
  const file=document.getElementById("img").files[0];
 
@@ -173,15 +198,14 @@ function addCoupon(){
    used:false
  };
 
- const done=()=>{
-   data.push(item);
-   save();
+ const done=async()=>{
+   await saveItem(item);
    clearForm();
    render();
  };
 
  if(file){
-   compressImage(file,(img)=>{
+   compressImage(file,img=>{
      item.img=img;
      done();
    });
@@ -191,28 +215,26 @@ function addCoupon(){
 }
 
 function clearForm(){
- ["name","store","date","memo","img"].forEach(id=>{
-   document.getElementById(id).value="";
- });
+["name","store","date","memo","img"].forEach(id=>{
+ document.getElementById(id).value="";
+});
 }
 
-function toggle(id){
- const x=data.find(v=>v.id===id);
- if(x){
-   x.used=!x.used;
-   save();
-   render();
- }
+async function toggle(id){
+ let arr=await getAll();
+ let x=arr.find(v=>v.id===id);
+ x.used=!x.used;
+ await saveItem(x);
+ render();
 }
 
-function del(id){
- data=data.filter(v=>v.id!==id);
- save();
+async function del(id){
+ await deleteItem(id);
  render();
 }
 
 function esc(s){
- return String(s).replace(/[&<>"]/g,m=>({
+ return String(s||"").replace(/[&<>"]/g,m=>({
  "&":"&amp;",
  "<":"&lt;",
  ">":"&gt;",
@@ -239,7 +261,11 @@ function sortData(arr){
  return arr;
 }
 
-function render(){
+async function render(){
+
+ if(!db)return;
+
+ let data=await getAll();
 
  const q=gv("search").toLowerCase();
  const today=new Date().toISOString().slice(0,10);
@@ -248,39 +274,40 @@ function render(){
  list.innerHTML="";
 
  let arr=data.filter(x=>
-   x.name.toLowerCase().includes(q) ||
-   x.store.toLowerCase().includes(q) ||
-   x.memo.toLowerCase().includes(q)
+  x.name.toLowerCase().includes(q) ||
+  x.store.toLowerCase().includes(q) ||
+  x.memo.toLowerCase().includes(q)
  );
 
  arr=sortData(arr);
 
  arr.forEach(x=>{
 
-   const d=document.createElement("div");
+ const d=document.createElement("div");
 
-   d.className="card "
-   +(x.used?"used ":"")
-   +((x.date && x.date<today)?"expired":"");
+ d.className="card "
+ +(x.used?"used ":"")
+ +((x.date && x.date<today)?"expired":"");
 
-   d.innerHTML=`
-   <b>${esc(x.name)}</b>
-   <div class="small">${esc(x.store)} ${esc(x.date)}</div>
-   <div style="margin-top:6px">${esc(x.memo)}</div>
+ d.innerHTML=`
+ <b>${esc(x.name)}</b>
+ <div class="small">${esc(x.store)} ${esc(x.date)}</div>
+ <div style="margin-top:6px">${esc(x.memo)}</div>
 
-   <div class="row" style="margin-top:8px">
-     <button onclick="toggle(${x.id})">
-       ${x.used?"未使用へ戻す":"使用済み"}
-     </button>
-     <button onclick="del(${x.id})" style="background:#ff3b30">
-       削除
-     </button>
-   </div>
+ <div class="row" style="margin-top:8px">
+   <button onclick="toggle(${x.id})">
+   ${x.used?"未使用へ戻す":"使用済み"}
+   </button>
 
-   ${x.img ? `<img src="${x.img}" onclick="zoom('${x.img}')">` : ""}
-   `;
+   <button onclick="del(${x.id})" style="background:#ff3b30">
+   削除
+   </button>
+ </div>
 
-   list.appendChild(d);
+ ${x.img?`<img src="${x.img}" onclick="zoom('${x.img}')">`:""}
+ `;
+
+ list.appendChild(d);
  });
 }
 
@@ -288,8 +315,6 @@ function zoom(src){
  document.getElementById("modal").style.display="block";
  document.getElementById("modalImg").src=src;
 }
-
-render();
 </script>
 
 </body>
